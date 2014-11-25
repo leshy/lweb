@@ -3,10 +3,13 @@ Backbone = require 'backbone4000'
 helpers = require 'helpers'
 _ = require 'underscore'
 
+SubscriptionMan = require('subscriptionman2')
+validator = require('validator2-extras'); v = validator.v
+
 # inherit code common to serverside and clientside
 _.extend exports, shared = require './shared'
 
-Channel = shared.SubscriptionMan.extend4000
+Channel = SubscriptionMan.fancy.extend4000
     initialize: () ->
         @name = @get 'name' or throw 'channel needs a name'
         @clients = {}
@@ -49,12 +52,12 @@ ChannelServer = shared.channelInterface.extend4000
         if not channel = @channels[channelname] then return
         channel.part socket
 
-
-lweb = exports.lweb = shared.SubscriptionMan.extend4000 shared.queryClient, shared.queryServer, ChannelServer,
-    initialize: -> 
-        http = @get 'http'        
+lweb = exports.lweb = validator.ValidatedModel.extend4000 SubscriptionMan.fancy,
+    initialize: ->
+        @verbose = @get('verbose') or @parent.verbose or false
+        http = @get 'http'
         if not http then throw "I need http instance in order to listen"
-            
+        @query = new shared.queryServer parent: @
         @server = io.listen http, log: false # turning off socket.io logging
 
         # this kinda sucks, I'd like to hook messages on the server object level,
@@ -69,12 +72,13 @@ lweb = exports.lweb = shared.SubscriptionMan.extend4000 shared.queryClient, shar
             realm.client = client
             
             # channels
-            client.on 'join', (msg) => @join msg.channel, client
-            client.on 'part', (msg) => @part msg.channel, client
-            # queries
-            client.on 'query', (msg) => @queryReceive msg, client, realm
-            client.on 'reply', (msg) => @queryReplyReceive msg, client, realm
+            #client.on 'join', (msg) => @join msg.channel, client
+            #client.on 'part', (msg) => @part msg.channel, client
 
+            # queries
+            client.on 'msg', (msg) => @event msg, realm, client
+#            client.on 'reply', (msg) => @event _.extend({ type: 'reply' }, msg), realm, client
+#            client.on 'queryCancel', (msg) => @event _.extend({ type: 'queryCancel' }, msg), realm, client
         # just a test channel broadcasts
         ###
         testyloopy = =>
@@ -82,4 +86,4 @@ lweb = exports.lweb = shared.SubscriptionMan.extend4000 shared.queryClient, shar
             helpers.sleep 10000, testyloopy
         testyloopy()
         ###
-
+        console.log 'lwebs done'

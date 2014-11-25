@@ -2,7 +2,9 @@ Backbone = require 'backbone4000'
 _ = require 'underscore'
 helpers = require 'helpers'
 
-SubscriptionMan = exports.SubscriptionMan = require('subscriptionman2').basic
+validator = require('validator2-extras'); v = validator.v
+
+SubscriptionMan = exports.SubscriptionMan = require('subscriptionman2')
 
 channelInterface = exports.channelInterface = Backbone.Model.extend4000
     initialize: ->
@@ -24,53 +26,73 @@ channelInterface = exports.channelInterface = Backbone.Model.extend4000
     part: (channel,listener) -> true
     del: -> true      
 
-class Response
-    constructor: (@id, @client) -> 
-
-    makereply: (payload,end) ->
-        if @ended then throw 'reply already ended'
-        msg = {}
-        msg.id = @id
-        if payload then msg.payload = payload
-        if end then msg.end = true
-        msg
+Response = Backbone.Model.extend4000
+    constructor: (@id, @client, @parent) ->
+        @verbose = @parent.verbose
+        if not client.responses then client.responses = {}
+        client.responses[@id] = @
+#        Backbone.Model.apply @
         
     write: (payload) ->
-        @client.emit 'reply', reply = @makereply(payload)
-        
+        if @ended then console.warn 'writing to ended query',payload; return
+        if not payload then throw 'no payload'
+        if @verbose then console.log "<",@id,payload
+        @client.emit 'msg', { type: 'reply', id: @id, payload: payload }
+
     end: (payload) ->
-        @client.emit 'reply', reply = @makereply(payload, true)
-        @ended = true
+        if @ended then console.warn 'ending ended query',payload; return
+        if @verbose then console.log "<<",@id, payload
+        @ended = true        
+        msg = { type: 'reply', id: @id, end: true }
+        if payload then msg.payload = payload
+        @client.emit 'msg', msg
+        delete @client.responses[@id]
+        @trigger 'end'
 
-queryClient = exports.queryClient = Backbone.Model.extend4000
+    cancel: -> 
+        @trigger 'cancel'; @end()
+
+
+queryClient = exports.queryClient = validator.ValidatedModel.extend4000
+    validator:
+        parent: 'Instance'
+
     initialize: ->
-        @queries = []
+        @callbacks = {}
+        @parent = @get 'parent'
+        @verbose = @get('verbose') or @parent.verbose or false
+        @parent.subscribe { type: 'reply', id: String }, (msg) =>
+            @callbacks[msg.id]?(msg.payload,msg.end or false)
 
-    queryReplyReceive: (msg) ->
-#        console.log 'reply', msg.id, msg.payload
-        if not callback = @queries[msg.id] then return
-        if not msg.end
-            callback msg.payload, false
-        else
-            callback msg.payload, true
-            delete @queries[msg.id]
-        
-    query: (msg,callback) ->
-        id = helpers.uuid(10)
-        @queries[id] = callback
-#        console.log 'query',id,msg
-        @socket.emit 'query', { id: id, payload: msg }
-        true
+            
+    query: (payload,callback) ->
+        console.log "QUERY",payload
+        if not payload then return console.warn 'tried to send a message without payload'
+        @parent.send type: 'query', id: id = helpers.uuid(10), payload: payload
+        @callbacks[id] = callback
 
-queryServer = exports.queryServer = SubscriptionMan.extend4000
-    queryReceive: (msg,client,realm) ->
-#        console.log 'got query',msg
-        if not msg.payload or not msg.id then return console.warn 'invalid query message received:',msg
-        @event msg.payload, msg.id, client, realm
 
+# as parent it expects something with send and receive methods that's a subclass of subscriptionman
+queryServer = exports.queryServer = validator.ValidatedModel.extend4000 SubscriptionMan.fancy,
+    validator:
+        parent: 'Instance'
     
+    initialize: ->
+        @parent = @get 'parent'
+        @verbose = @get('verbose') or @parent.verbose or false
+        
+        @parent.subscribe { type: 'query', id: String, payload: true }, (msg,realm,client) =>
+            if @verbose then console.log '>',msg.id,msg.payload
+                
+            response = new Response msg.id, client, @
+            matches = @event msg.payload, response, realm
+            
+            if not matches then delete client.responses[msg.id]
+
+        @parent.subscribe { type: 'queryCancel', id: String }, (msg,realm,client) =>
+            if @verbose then console.log 'X',msg.id
+            client.responses[msg.id]?.cancel()
+        
     subscribe: (pattern, callback) ->
         if not callback and pattern.constructor is Function then callback = pattern and pattern = true
-        wrapped = (msg, id, client, realm) -> callback msg, new Response(id,client), realm
-        SubscriptionMan::subscribe.call @, pattern, wrapped
-
+        SubscriptionMan.fancy::.subscribe.call @, pattern, callback

@@ -4,11 +4,14 @@ io = require 'socket.io-browserify'
 helpers = require 'helpers'
 _ = require 'underscore'
 
+SubscriptionMan = require('subscriptionman2')
+validator = require('validator2-extras'); v = validator.v
+
 # inherit code common to serverside and clientside
 _.extend exports, shared = require './shared'
 _.extend exports, collections = require './remotecollections/clientside'
 
-Channel = exports.Channel = shared.SubscriptionMan.extend4000
+Channel = exports.Channel = SubscriptionMan.fancy.extend4000
     validator: v(name: "String", lweb: "Instance")
 
     initialize: ->
@@ -39,13 +42,15 @@ Channel = exports.Channel = shared.SubscriptionMan.extend4000
 ChannelClient = shared.channelInterface.extend4000
     ChannelClass: Channel
 
-lweb = exports.lweb = ChannelClient.extend4000 shared.queryClient, shared.queryServer,
+lweb = exports.lweb = SubscriptionMan.fancy.extend4000
     initialize: ->
+        @query = new shared.queryClient parent: @
+
         if window? then window?lweb = @
         @socket = io.connect @get('host') or "http://" + window?location?host
-        @socket.on 'query', (msg) => @queryReceive msg, @socket
-        @socket.on 'reply', (msg) => @queryReplyReceive msg, @socket
-                        
+        @socket.on 'msg', (msg) => @event msg, {}, @socket
+    send: (msg) ->
+        @socket.emit 'msg', msg
     collection: (name) -> new exports.RemoteCollection lweb: @, name: name
 
 

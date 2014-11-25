@@ -33,10 +33,12 @@
     http = Http.createServer(app);
     http.listen(++port);
     lwebs = new Lwebs.lweb({
-      http: http
+      http: http,
+      verbose: true
     });
     lwebc = new Lwebc.lweb({
-      host: 'http://localhost:' + port
+      host: 'http://localhost:' + port,
+      verbose: true
     });
     return lwebs.server.on('connection', function() {
       return callback(lwebs, lwebc, http, function(test) {
@@ -56,15 +58,18 @@
 
   exports.query = function(test) {
     return gimmeEnv(function(lwebs, lwebc, http, done) {
-      lwebs.subscribe({
+      console.log('got env');
+      lwebs.query.subscribe({
         bla: true
       }, function(query, realm, reply) {
+        console.log("GOT SUB!!!");
         test.deepEqual(query, {
           bla: 33
         });
         return done(test);
       });
-      return lwebc.query({
+      console.log('subscribe succes');
+      return lwebc.query.query({
         bla: 33
       });
     });
@@ -72,7 +77,7 @@
 
   exports.queryReply = function(test) {
     return gimmeEnv(function(lwebs, lwebc, http, done) {
-      lwebs.subscribe({
+      lwebs.query.subscribe({
         bla: true
       }, function(query, reply) {
         test.deepEqual(query, {
@@ -82,7 +87,7 @@
           blu: 66
         });
       });
-      return lwebc.query({
+      return lwebc.query.query({
         bla: 33
       }, function(reply) {
         test.deepEqual(reply, {
@@ -96,7 +101,7 @@
   exports.queryStreamReply = function(test) {
     return gimmeEnv(function(lwebs, lwebc, http, done) {
       var total;
-      lwebs.subscribe({
+      lwebs.query.subscribe({
         bla: true
       }, function(query, reply) {
         test.deepEqual(query, {
@@ -124,7 +129,7 @@
         });
       });
       total = 0;
-      return lwebc.query({
+      return lwebc.query.query({
         bla: 33
       }, function(reply, end) {
         total += reply.r;

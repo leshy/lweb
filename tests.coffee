@@ -22,14 +22,14 @@ gimmeEnv = (callback) ->
         app.use app.router
         app.use (err, req, res, next) ->
             res.send 500, 'BOOOM!'
-            
+
     http = Http.createServer app
     
     # I dont know why but I need to cycle ports, maybe http doesn't fully close, I don't know man.
     http.listen ++port 
 
-    lwebs = new Lwebs.lweb http: http
-    lwebc = new Lwebc.lweb host: 'http://localhost:' + port
+    lwebs = new Lwebs.lweb http: http, verbose: true
+    lwebc = new Lwebc.lweb host: 'http://localhost:' + port, verbose: true
     
     lwebs.server.on 'connection', ->
         callback lwebs, lwebc, http, (test) ->
@@ -43,25 +43,28 @@ exports.connect = (test) ->
 
 exports.query = (test) ->
     gimmeEnv (lwebs,lwebc,http,done) ->
-        lwebs.subscribe bla: true, (query,realm,reply) ->
+        console.log 'got env'
+        lwebs.query.subscribe bla: true, (query,realm,reply) ->
+            console.log "GOT SUB!!!"
             test.deepEqual query, bla: 33
             done test
-        lwebc.query bla: 33
+        console.log 'subscribe succes'
+        lwebc.query.query bla: 33
 
 exports.queryReply = (test) ->
     gimmeEnv (lwebs,lwebc,http,done) ->        
-        lwebs.subscribe bla: true, (query,reply) ->
+        lwebs.query.subscribe bla: true, (query,reply) ->
             test.deepEqual query, bla: 33
             reply.end { blu: 66 }
             
-        lwebc.query bla: 33, (reply) ->
+        lwebc.query.query bla: 33, (reply) ->
             test.deepEqual reply, blu: 66
             done test
 
 exports.queryStreamReply = (test) ->
     gimmeEnv (lwebs,lwebc,http,done) ->
         
-        lwebs.subscribe bla: true, (query,reply) ->
+        lwebs.query.subscribe bla: true, (query,reply) ->
             test.deepEqual query, bla: 33
             helpers.wait 10, -> reply.write { r: 2 }
             helpers.wait 30, -> reply.write { r: 6 }
@@ -69,7 +72,7 @@ exports.queryStreamReply = (test) ->
             helpers.wait 90, -> reply.end { r: 88 }
             
         total = 0
-        lwebc.query bla: 33, (reply,end) ->
+        lwebc.query.query bla: 33, (reply,end) ->
             total += reply.r
             if end
                 test.deepEqual reply, r:88
