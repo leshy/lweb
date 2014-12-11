@@ -133,7 +133,6 @@
     },
     query: function(payload, callback) {
       var id;
-      console.log("QUERY", payload);
       if (!payload) {
         return console.warn('tried to send a message without payload');
       }

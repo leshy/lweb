@@ -49,8 +49,10 @@ lweb = exports.lweb = SubscriptionMan.fancy.extend4000
         if window? then window?lweb = @
         @socket = io.connect @get('host') or "http://" + window?location?host
         @socket.on 'msg', (msg) => @event msg, {}, @socket
+        
     send: (msg) ->
         @socket.emit 'msg', msg
+        
     collection: (name) -> new exports.RemoteCollection lweb: @, name: name
 
 

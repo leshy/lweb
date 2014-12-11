@@ -66,7 +66,6 @@ queryClient = exports.queryClient = validator.ValidatedModel.extend4000
 
             
     query: (payload,callback) ->
-        console.log "QUERY",payload
         if not payload then return console.warn 'tried to send a message without payload'
         @parent.send type: 'query', id: id = helpers.uuid(10), payload: payload
         @callbacks[id] = callback
